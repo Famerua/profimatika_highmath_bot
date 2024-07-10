@@ -6,6 +6,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from csv import DictReader, DictWriter, writer
 import aiogram.exceptions
+import datetime
 
 with open("api.text") as f:
     API_TOKEN = f.read()
@@ -69,21 +70,32 @@ async def sending_message(message: Message, keyboard=None):
     try:
         with open("users.csv", encoding="utf-8") as file:
             users = DictReader(file)
-            for user in users:
-                try:
-                    if keyboard is None:
-                        await message.send_copy(chat_id=user["chat_id"])
-                    else:
-                        await message.send_copy(chat_id=user["chat_id"], reply_markup=keyboard)                
-                except aiogram.exceptions.TelegramBadRequest as e:
-                    # Логируем ошибку и продолжаем с другим пользователем
-                    print(f"Ошибка при отправке сообщения в чат {user['chat_id']}: {e}")
-                except aiogram.exceptions.TelegramForbidden as e:
-                    # Логируем ошибку и продолжаем с другим пользователем
-                    print(f"Нет доступа к чату {user['chat_id']}: {e}")
-                except Exception as e:
+            with open("sent_messages.csv", "a", newline='', encoding="utf-8") as sent_file:
+                fieldnames = ["chat_id", "message_id", "timestamp"]
+                writer = DictWriter(sent_file, fieldnames=fieldnames)
+                for user in users:
+                    try:
+                        if keyboard is None:
+                            sent_message = await message.send_copy(chat_id=user["chat_id"])
+                        else:
+                            sent_message = await message.send_copy(chat_id=user["chat_id"], reply_markup=keyboard)
+                        
+                        # Сохраняем chat_id, message_id и время отправки
+                        writer.writerow({
+                            "chat_id": user["chat_id"],
+                            "message_id": sent_message.message_id,
+                            "timestamp": datetime.datetime.now().isoformat()
+                        })   
+                    except aiogram.exceptions.TelegramBadRequest as e:
+                        # Логируем ошибку и продолжаем с другим пользователем
+                        print(f"Ошибка при отправке сообщения в чат {user['chat_id']}: {e}")
+                    except aiogram.exceptions.TelegramForbiddenError as e:
+                        # Логируем ошибку и продолжаем с другим пользователем
+                        print(f"Нет доступа к чату {user['chat_id']}: {e}")
+                    except Exception as e:
                     # Логируем любую другую ошибку и продолжаем с другим пользователем
-                    print(f"Неизвестная ошибка при отправке сообщения в чат {user['chat_id']}: {e}")
+                        print(f"Неизвестная ошибка при отправке сообщения в чат {user['chat_id']}: {e}")
+                print('Бот разослал')
     except TypeError:
         await message.reply(text="Не могу это переотправить")
     except Exception as e:
@@ -113,7 +125,6 @@ async def take_ref(message: Message, state: FSMContext):
         await message.answer('Принял! Начинаю рассылку с ссылкой')
         await sending_message(NOTIFICATION_MESSAGE, keyboard_ref)
         await state.clear()
-        print('Бот разослал')
     else:
         await message.answer('Некорректный формат. Введите /cancel, чтобы начать рассылку заново')
 
