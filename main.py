@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state, State, StatesGroup
 from aiogram.types import Message
 from csv import DictReader, DictWriter, writer
+import aiogram.exceptions
 
 with open("api.text") as f:
     API_TOKEN = f.read()
@@ -35,18 +36,33 @@ async def notificate_message(message: Message, state: FSMContext):
         with open("users.csv", encoding="utf-8") as file:
             users = DictReader(file)
             for user in users:
-                await message.send_copy(chat_id=user["chat_id"])
+                try:
+                    await message.send_copy(chat_id=user["chat_id"])
+                except aiogram.exceptions.TelegramBadRequest as e:
+                    # Логируем ошибку и продолжаем с другим пользователем
+                    print(f"Ошибка при отправке сообщения в чат {user['chat_id']}: {e}")
+                except aiogram.exceptions.TelegramForbidden as e:
+                    # Логируем ошибку и продолжаем с другим пользователем
+                    print(f"Нет доступа к чату {user['chat_id']}: {e}")
+                except Exception as e:
+                    # Логируем любую другую ошибку и продолжаем с другим пользователем
+                    print(f"Неизвестная ошибка при отправке сообщения в чат {user['chat_id']}: {e}")
     except TypeError:
         await message.reply(text="Не могу это переотправить")
-    # except: 
-    #     await message.reply(text="Что-то не так")
+    except Exception as e:
+        await message.reply(text=f"Что-то пошло не так: {e}")
     await state.clear()
 
 
 @dp.message(Command(commands=["start"]), StateFilter(default_state))
 async def process_start_command(message: Message):
     await message.answer(
-        f"Привет!\nХотите получать уведомления о начале вебор Максима? Если да, то напишите комманду /activate"
+        f"""<b>Приветствую!</b> 
+
+<em>Данный бот будет уведомлять тебя о выходе новых видео на канале Макса, также ты одним из первых будешь получать актуальную информацию об онлайн трансляциях и вебинарах с курсов по <b>Высшей Математике</b> и узнавать о самых приятных ценах на грядущие курсы)</em>
+
+<b>Если ты согласен, то напиши команду /activate</b>""",
+        parse_mode="HTML"
     )
 
 
