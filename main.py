@@ -1,43 +1,80 @@
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state, State, StatesGroup
-from aiogram.types import Message
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from csv import DictReader, DictWriter, writer
 import aiogram.exceptions
 
 with open("api.text") as f:
     API_TOKEN = f.read()
 
+storage = MemoryStorage()
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher()
+dp = Dispatcher(storage=storage)
 
+NOTIFICATION_MESSAGE: Message
 
 class FSMwaitnotification(StatesGroup):
     notification_message = State()
+    add_ref_question = State()
+    take_ans_ref_question = State()
+    wait_ref = State()
 
 
 def is_admin(message: Message):
     return message.from_user.id in [5552984613, 760337093]
 
+@dp.message(Command(commands='cancel'), ~StateFilter(default_state))
+async def process_cancel_command_state(message: Message, state: FSMContext):
+    if is_admin(message):
+        await message.answer(
+            text='Рассылка отменена',
+            reply_markup=ReplyKeyboardRemove()
+        )
+        # Сбрасываем состояние и очищаем данные, полученные внутри состояний
+        await state.clear()
+    else:
+        await message.answer("Вы кто такой? Я вас не знаю!")
 
+#admin
 @dp.message(Command(commands=["notificate"]), StateFilter(default_state))
 async def admin_notification(message: Message, state: FSMContext):
     if is_admin(message):
         await message.answer("Привет, админ!\n Что надо разослать?")
-        await state.set_state(FSMwaitnotification.notification_message)
+        await state.set_state(FSMwaitnotification.add_ref_question)
     else:
         await message.answer("Вы кто такой? Я вас не знаю!")
 
 
-@dp.message(StateFilter(FSMwaitnotification.notification_message))
-async def notificate_message(message: Message, state: FSMContext):
+#admin
+@dp.message(StateFilter(FSMwaitnotification.add_ref_question))
+async def ask_about_ref(message: Message, state: FSMContext):
+    print('Бот в состоянии (Получил сообщение. Задал вопрос о ссылке)')
+
+    global NOTIFICATION_MESSAGE
+    NOTIFICATION_MESSAGE = message
+
+    button_add_ref_yes = KeyboardButton(text='Да')
+    button_add_ref_no = KeyboardButton(text='Нет')
+    keyboard_add_ref = ReplyKeyboardMarkup(keyboard=[[button_add_ref_yes, button_add_ref_no]], resize_keyboard=True)
+
+    await message.answer('Добавить ссылку?', reply_markup=keyboard_add_ref)
+    await state.set_state(FSMwaitnotification.take_ans_ref_question)
+
+
+async def sending_message(message: Message, keyboard=None):
+    print("Бот рассылает")
     try:
         with open("users.csv", encoding="utf-8") as file:
             users = DictReader(file)
             for user in users:
                 try:
-                    await message.send_copy(chat_id=user["chat_id"])
+                    if keyboard is None:
+                        await message.send_copy(chat_id=user["chat_id"])
+                    else:
+                        await message.send_copy(chat_id=user["chat_id"], reply_markup=keyboard)                
                 except aiogram.exceptions.TelegramBadRequest as e:
                     # Логируем ошибку и продолжаем с другим пользователем
                     print(f"Ошибка при отправке сообщения в чат {user['chat_id']}: {e}")
@@ -51,7 +88,35 @@ async def notificate_message(message: Message, state: FSMContext):
         await message.reply(text="Не могу это переотправить")
     except Exception as e:
         await message.reply(text=f"Что-то пошло не так: {e}")
-    await state.clear()
+
+#admin
+@dp.message(StateFilter(FSMwaitnotification.take_ans_ref_question))
+async def take_ans_ref_question(message: Message, state: FSMContext):
+    if message.text == 'Да':
+        print('Бот в состоянии (Получаю ссылку)')
+        await message.answer("Жду от вас название ссылки и саму ссылку в таком формате", reply_markup=ReplyKeyboardRemove())
+        await message.answer("Название ссылки\n\nСсылка")
+        await state.set_state(FSMwaitnotification.wait_ref)
+    elif message.text == 'Нет':
+        await message.answer('Хорошо. Рассылаю сообщение!', reply_markup=ReplyKeyboardRemove())
+        # await state.set_state(FSMwaitnotification.ask_about_button)
+        await sending_message(NOTIFICATION_MESSAGE)
+        await state.clear()
+
+@dp.message(StateFilter(FSMwaitnotification.wait_ref))
+async def take_ref(message: Message, state: FSMContext):
+    url = message.text.split('\n\n')
+    if  len(url) == 2:
+        print('Бот в состояннии (Получил ссылку)')
+        url_inline_button = InlineKeyboardButton(text=url[0], url=url[1])
+        keyboard_ref = InlineKeyboardMarkup(inline_keyboard=[[url_inline_button]])
+        await message.answer('Принял! Начинаю рассылку с ссылкой')
+        await sending_message(NOTIFICATION_MESSAGE, keyboard_ref)
+        await state.clear()
+        print('Бот разослал')
+    else:
+        await message.answer('Некорректный формат. Введите /cancel, чтобы начать рассылку заново')
+
 
 
 @dp.message(Command(commands=["start"]), StateFilter(default_state))
