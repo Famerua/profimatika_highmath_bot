@@ -90,11 +90,11 @@ async def sending_message(message: Message, keyboard=None):
                     try:
                         if keyboard is None:
                             sent_message = await message.send_copy(
-                                chat_id=user["chat_id"]
+                                chat_id=user["chat_id"], parse_mode='HTML'
                             )
                         else:
                             sent_message = await message.send_copy(
-                                chat_id=user["chat_id"], reply_markup=keyboard
+                                chat_id=user["chat_id"], reply_markup=keyboard, parse_mode='HTML'
                             )
 
                         # Сохраняем chat_id, message_id и время отправки
