@@ -14,12 +14,11 @@ from aiogram.types import (
 from csv import DictReader, DictWriter, writer
 import aiogram.exceptions
 import datetime
+from config import BOT_TOKEN
 
-with open("api.text") as f:
-    API_TOKEN = f.read()
 
 storage = MemoryStorage()
-bot = Bot(token=API_TOKEN)
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=storage)
 
 NOTIFICATION_MESSAGE: Message
