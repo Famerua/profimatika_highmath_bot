@@ -28,7 +28,9 @@ class FSMwaitnotification(StatesGroup):
     notification_message = State()
     add_ref_question = State()
     take_ans_ref_question = State()
-    wait_ref = State()
+    take_count_ref = State()
+    wait_1_ref = State()
+    wait_2_ref = State()
 
 
 def is_admin(message: Message):
@@ -127,14 +129,23 @@ async def sending_message(message: Message, keyboard=None):
 # admin
 @dp.message(StateFilter(FSMwaitnotification.take_ans_ref_question))
 async def take_ans_ref_question(message: Message, state: FSMContext):
+    print('Бот получил ответ насчет количества ссылок')
     if message.text == "Да":
-        print("Бот в состоянии (Получаю ссылку)")
-        await message.answer(
-            "Жду от вас название ссылки и саму ссылку в таком формате",
-            reply_markup=ReplyKeyboardRemove(),
+        button_1_ref = KeyboardButton(text="1")
+        button_2_ref = KeyboardButton(text="2")
+        keyboard_count_ref = ReplyKeyboardMarkup(
+            keyboard=[[button_1_ref, button_2_ref]], resize_keyboard=True
         )
-        await message.answer("Название ссылки\n\nСсылка")
-        await state.set_state(FSMwaitnotification.wait_ref)
+        print('Бот спрашивает количество ссылок')
+        await message.answer(text='Сколько ссылок добавить?', reply_markup=keyboard_count_ref)
+        
+        # print("Бот в состоянии (Получаю ссылку)")
+        # await message.answer(
+        #     "Жду от вас название ссылки и саму ссылку в таком формате",
+        #     reply_markup=ReplyKeyboardRemove(),
+        # )
+        # await message.answer("Название ссылки\n\nСсылка")
+        await state.set_state(FSMwaitnotification.take_count_ref)
     elif message.text == "Нет":
         await message.answer(
             "Хорошо. Рассылаю сообщение!", reply_markup=ReplyKeyboardRemove()
@@ -143,8 +154,32 @@ async def take_ans_ref_question(message: Message, state: FSMContext):
         await sending_message(NOTIFICATION_MESSAGE)
         await state.clear()
 
+# admin
+# @dp.message(StateFilter(FSMwaitnotification.ask_count_of_ref))
+# async def ask_count_of_refs(message: Message, state: FSMContext):
+#     await state.set_state(FSMwaitnotification.take_count_ref)
 
-@dp.message(StateFilter(FSMwaitnotification.wait_ref))
+#admin
+@dp.message(StateFilter(FSMwaitnotification.take_count_ref))
+async def take_count_refs(message: Message, state: FSMContext):
+    if message.text == '1':
+        await message.answer(
+            "Жду от вас название ссылки и саму ссылку в таком формате",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        await message.answer("Название ссылки\n\nСсылка")
+        await state.set_state(FSMwaitnotification.wait_1_ref)
+
+    elif message.text == '2':
+        await message.answer(
+            "Жду от вас названия ссылок и сами ссылки в таком формате",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        await message.answer("Название первой ссылки\n\nПервая сылка\n\nНазвание второй ссылки\n\nВторая ссылка")
+        await state.set_state(FSMwaitnotification.wait_2_ref)
+
+
+@dp.message(StateFilter(FSMwaitnotification.wait_1_ref))
 async def take_ref(message: Message, state: FSMContext):
     url = message.text.split("\n\n")
     if len(url) == 2:
@@ -153,6 +188,22 @@ async def take_ref(message: Message, state: FSMContext):
         keyboard_ref = InlineKeyboardMarkup(inline_keyboard=[[url_inline_button]])
         await message.answer("Принял! Начинаю рассылку с ссылкой")
         await sending_message(NOTIFICATION_MESSAGE, keyboard_ref)
+        await state.clear()
+    else:
+        await message.answer(
+            "Некорректный формат. Введите /cancel, чтобы начать рассылку заново"
+        )
+
+@dp.message(StateFilter(FSMwaitnotification.wait_2_ref))
+async def take_ref(message: Message, state: FSMContext):
+    url = message.text.split("\n\n")
+    if len(url) == 4:
+        print("Бот в состояннии (Получил ссылки)")
+        url_inline_1_button = InlineKeyboardButton(text=url[0], url=url[1])
+        url_inline_2_button = InlineKeyboardButton(text=url[2], url=url[3])
+        keyboard_refs = InlineKeyboardMarkup(inline_keyboard=[[url_inline_1_button, url_inline_2_button]])
+        await message.answer("Принял! Начинаю рассылку с ссылкой")
+        await sending_message(NOTIFICATION_MESSAGE, keyboard_refs)
         await state.clear()
     else:
         await message.answer(
