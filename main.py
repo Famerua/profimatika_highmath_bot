@@ -80,10 +80,10 @@ async def ask_about_ref(message: Message, state: FSMContext):
 async def sending_message(message: Message, keyboard=None):
     print("Бот рассылает")
     try:
-        with open("/data/users.csv", encoding="utf-8") as file:
+        with open("data/users.csv", encoding="utf-8") as file:
             users = DictReader(file)
             with open(
-                "/data/sent_messages.csv", "a", newline="", encoding="utf-8"
+                "data/sent_messages.csv", "a", newline="", encoding="utf-8"
             ) as sent_file:
                 fieldnames = ["chat_id", "message_id", "timestamp"]
                 writer = DictWriter(sent_file, fieldnames=fieldnames)
@@ -167,7 +167,7 @@ async def take_count_refs(message: Message, state: FSMContext):
             "Жду от вас название ссылки и саму ссылку в таком формате",
             reply_markup=ReplyKeyboardRemove(),
         )
-        await message.answer("Название ссылки\n\nСсылка")
+        await message.answer("Название ссылки\nСсылка")
         await state.set_state(FSMwaitnotification.wait_1_ref)
 
     elif message.text == '2':
@@ -175,13 +175,14 @@ async def take_count_refs(message: Message, state: FSMContext):
             "Жду от вас названия ссылок и сами ссылки в таком формате",
             reply_markup=ReplyKeyboardRemove(),
         )
-        await message.answer("Название первой ссылки\n\nПервая сылка\n\nНазвание второй ссылки\n\nВторая ссылка")
+        await message.answer("Название первой ссылки\nПервая сылка\nНазвание второй ссылки\nВторая ссылка")
         await state.set_state(FSMwaitnotification.wait_2_ref)
 
 
 @dp.message(StateFilter(FSMwaitnotification.wait_1_ref))
 async def take_ref(message: Message, state: FSMContext):
-    url = message.text.split("\n\n")
+    url = message.text.split("\n")
+    print('1 url')
     if len(url) == 2:
         print("Бот в состояннии (Получил ссылку)")
         url_inline_button = InlineKeyboardButton(text=url[0], url=url[1])
@@ -196,7 +197,9 @@ async def take_ref(message: Message, state: FSMContext):
 
 @dp.message(StateFilter(FSMwaitnotification.wait_2_ref))
 async def take_ref(message: Message, state: FSMContext):
-    url = message.text.split("\n\n")
+    url = message.text.split("\n")
+    print('2 url')
+    print(url, len(url), message.text, sep='\n')
     if len(url) == 4:
         print("Бот в состояннии (Получил ссылки)")
         url_inline_1_button = InlineKeyboardButton(text=url[0], url=url[1])
@@ -213,7 +216,7 @@ async def take_ref(message: Message, state: FSMContext):
 
 @dp.message(Command(commands=["stats"]), is_admin, StateFilter(default_state))
 async def get_stats(message: Message):
-    with open("/data/users.csv") as file:
+    with open("data/users.csv") as file:
         Users = DictReader(file)
         readers = [f"@{user['username']}" for user in Users]
     await message.answer(f"Активные читатели {len(readers)}:\n{"\n".join(readers)}")
@@ -244,7 +247,7 @@ async def process_activate_command(message: Message):
     is_subscribed = False
 
     # Читаем CSV файл и проверяем наличие user_id
-    with open("/data/users.csv", newline="") as file:
+    with open("data/users.csv", newline="") as file:
         Reader = DictReader(file)
         for row in Reader:
             if row["user_id"] == user_id:
@@ -255,7 +258,7 @@ async def process_activate_command(message: Message):
         await message.answer("Вы уже подписаны!")
     else:
         # Добавляем новую запись в CSV файл
-        with open("/data/users.csv", "a", newline="") as csvfile:
+        with open("data/users.csv", "a", newline="") as csvfile:
             Writer = writer(csvfile)
             Writer.writerow(
                 [
@@ -272,18 +275,18 @@ async def process_deactivate_command(message: Message):
     user_id = str(message.from_user.id)  # Преобразуем user_id в строку
 
     # Проверяем, подписан ли пользователь
-    with open("/data/users.csv", newline="") as file:
+    with open("data/users.csv", newline="") as file:
         if user_id not in {row["user_id"] for row in DictReader(file)}:
             await message.answer("Вы и не подписаны...")
             return
 
     # Читаем CSV файл и удаляем пользователя
-    with open("/data/users.csv", "r", newline="") as csvfile:
+    with open("data/users.csv", "r", newline="") as csvfile:
         reader = DictReader(csvfile)
         rows = [row for row in reader if row["user_id"] != user_id]
 
     # Записываем обновленный список пользователей обратно в CSV файл
-    with open("/data/users.csv", "w", newline="") as csvfile:
+    with open("data/users.csv", "w", newline="") as csvfile:
         fieldnames = reader.fieldnames
         writer = DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
